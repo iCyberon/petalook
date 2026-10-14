@@ -1,0 +1,30 @@
+[package]
+name = "petalook"
+version = "0.1.0"
+edition = "2024"
+description = "A quiet, fast macOS image and video viewer built with GPUI"
+repository = "https://github.com/icyberon/petalook"
+authors = ["Vahagn Mkrtchyan"]
+license = "MIT"
+build = "build.rs"
+
+[dependencies]
+gpui = "=0.2.2"
+anyhow = "1"
+async-channel = "2"
+image = { version = "0.25", default-features = false }
+smallvec = "1"
+url = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+core-video = "0.4"
+raw-window-handle = "0.6"
+
+[build-dependencies]
+cc = "1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
