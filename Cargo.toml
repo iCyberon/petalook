@@ -1,6 +1,6 @@
 [package]
 name = "petalook"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "A quiet, fast macOS image and video viewer built with GPUI"
 repository = "https://github.com/icyberon/petalook"

@@ -670,11 +670,21 @@ impl Viewer {
         self.refresh_controls(window, cx);
     }
 
+    fn navigate_instantly(&mut self, direction: i32, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(target) = Navigation::step(self.index, self.files.len(), direction) else {
+            return;
+        };
+        self.cancel_transition(window);
+        self.transition_boundary = target.boundary;
+        self.index = target.index;
+        self.load_current(window, cx);
+    }
+
     fn next(&mut self, _: &Next, window: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(1, window, cx);
+        self.navigate_instantly(1, window, cx);
     }
     fn previous(&mut self, _: &Previous, window: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(-1, window, cx);
+        self.navigate_instantly(-1, window, cx);
     }
     fn media_extent(&self, window: &Window) -> Option<Extent> {
         self.picture

@@ -25,6 +25,22 @@ fn assert_presentation(view: &Viewer, window: &Window, expected: &MediaPresentat
     );
 }
 
+fn assert_instant_navigation(view: &Viewer, window: &Window, index: usize) {
+    assert_eq!(view.index, index);
+    assert!(!view.transitioning, "keyboard navigation started an animation");
+    assert!(view.transition_source.is_none());
+    assert!(view.swipe_transition.is_none());
+    assert!(view.pending_navigation.is_none());
+    assert_eq!(native::snapshot_count(window), 0);
+    if view.path().is_some_and(|path| view.cache.has(path, loader::PREVIEW_LIMIT)) {
+        assert!(!view.loading, "cached image was not shown immediately");
+        assert!(std::sync::Arc::ptr_eq(
+            &view.live_presentation(window).picture.unwrap().image,
+            &view.picture.as_ref().unwrap().image,
+        ));
+    }
+}
+
 pub(super) fn run_fit(window: &Window, cx: &mut Context<Viewer>) {
     cx.spawn_in(window, async move |this, cx| {
         Timer::after(Duration::from_secs(1)).await;
@@ -323,9 +339,12 @@ pub(super) fn run(window: &Window, cx: &mut Context<Viewer>) {
             assert_eq!(view.index, source + 1);
             assert!(!view.transitioning && view.swipe_transition.is_none());
             eprintln!("QA: reversed swipe and release before preview readiness passed");
-            view.navigate(-1, window, cx);
-            view.navigate(1, window, cx);
-            view.navigate(-1, window, cx);
+            view.previous(&Previous, window, cx);
+            assert_instant_navigation(view, window, source);
+            view.next(&Next, window, cx);
+            assert_instant_navigation(view, window, source + 1);
+            view.previous(&Previous, window, cx);
+            assert_instant_navigation(view, window, source);
         })
         .unwrap();
         Timer::after(Duration::from_millis(1000)).await;
@@ -338,15 +357,18 @@ pub(super) fn run(window: &Window, cx: &mut Context<Viewer>) {
         })
         .unwrap();
 
-        // Both wrap directions, including arrows queued during an active transition.
+        // Keyboard wraparound must switch in the same update, without snapshots.
         for (direction, index, boundary) in [
             (-1, 1, Boundary::Beginning),
             (1, 0, Boundary::End),
         ] {
             this.update_in(cx, |view, window, cx| {
-                let source = view.live_presentation(window);
-                view.navigate(direction, window, cx);
-                assert_presentation(view, window, &source);
+                if direction < 0 {
+                    view.previous(&Previous, window, cx);
+                } else {
+                    view.next(&Next, window, cx);
+                }
+                assert_instant_navigation(view, window, index);
             }).unwrap();
             for _ in 0..150 {
                 Timer::after(Duration::from_millis(20)).await;
@@ -403,15 +425,40 @@ pub(super) fn run(window: &Window, cx: &mut Context<Viewer>) {
             }).unwrap();
         }
         this.update_in(cx, |view, window, cx| {
-            view.navigate(1, window, cx);
-            view.navigate(1, window, cx);
+            view.next(&Next, window, cx);
+            assert_instant_navigation(view, window, 1);
+            view.next(&Next, window, cx);
+            assert_instant_navigation(view, window, 0);
         }).unwrap();
         Timer::after(Duration::from_millis(1000)).await;
         this.update_in(cx, |view, window, _| {
             assert!(!view.transitioning && view.index == 0);
             assert_eq!(view.cycle_notice.map(|notice| notice.0), Some(Boundary::End));
             assert_eq!(native::snapshot_count(window), 0);
-            eprintln!("QA: wraps, cancelled wraps, 24 rapid handoffs and stale completion rejection passed; ALL SWIPE CHECKS PASSED");
+            eprintln!("QA: wraps, cancelled wraps, 24 rapid handoffs and stale completion rejection passed");
+        }).unwrap();
+        this.update_in(cx, |view, window, cx| {
+            scroll(view, window, cx, TouchPhase::Started, 0.);
+            scroll(view, window, cx, TouchPhase::Moved, -100.);
+        }).unwrap();
+        Timer::after(Duration::from_millis(400)).await;
+        this.update_in(cx, |view, window, cx| {
+            assert!(view.swipe_transition.as_ref().unwrap().ready);
+            assert_eq!(native::snapshot_count(window), 2);
+            let epoch = view.transition_epoch;
+            view.previous(&Previous, window, cx);
+            assert_eq!(view.index, 0);
+            assert!(!view.transitioning && !view.trackpad_active);
+            assert!(view.transition_source.is_none());
+            view.transition_completed(epoch, window, cx);
+            scroll(view, window, cx, TouchPhase::Moved, -500.);
+            scroll(view, window, cx, TouchPhase::Ended, 0.);
+            assert_eq!(view.index, 0);
+        }).unwrap();
+        Timer::after(Duration::from_millis(100)).await;
+        this.update_in(cx, |view, window, _| {
+            assert_instant_navigation(view, window, 0);
+            eprintln!("QA: keyboard interrupts a held swipe and ignores stale completion and momentum; ALL SWIPE CHECKS PASSED");
         }).unwrap();
     })
     .detach();

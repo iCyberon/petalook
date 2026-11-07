@@ -13,7 +13,7 @@ Open a picture and let the interface disappear. Pinch to grow the image and its 
 ## Features
 
 - Image-first startup, background folder scanning, and neighboring-image preloading.
-- Trackpad swipes and arrow-key navigation, with continuous cycling through a folder.
+- Animated trackpad swipes and instant arrow-key navigation, with continuous cycling through a folder.
 - Frame-shaped zoom: the window fits the image, including when aspect ratios change.
 - Remembered Fit to Window limits and a Fit to Screen mode.
 - Drag the image to move its window, with gentle snapping near the screen center.
